@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JJLAB · MQTT 控制面板</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f2f8ff, #101a2b);
+  --surface: light-dark(rgba(255,255,255,.88), rgba(22,35,55,.9));
+  --text: light-dark(#20314d, #e8f1ff);
+  --muted: light-dark(#71839e, #9eb0c9);
+  --line: light-dark(#dce9f8, #2b3d58);
+  --blue: #8dc8ff;
+  --blue-deep: #347fca;
+  --green: #2ca879;
+  --red: #d65c6c;
+  --amber: #c58a28;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; }
+#app { min-height: 100vh; padding: 28px 18px 40px; background: radial-gradient(ellipse at 50% 0%, light-dark(#d9edff, #1b3657) 0%, var(--bg) 58%); }
+.shell { max-width: 760px; margin: 0 auto; }
+.topline { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:28px; }
+.brand { display:flex; align-items:center; gap:11px; font-weight:800; letter-spacing:.12em; font-size:13px; }
+.logo { width:38px; height:38px; display:grid; place-items:center; border-radius:13px; background:linear-gradient(145deg,#bce3ff,#6eaff0); color:#173e67; box-shadow:0 7px 18px #6ba9df3d; }
+.pill { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:8px 12px; font-size:12px; color:var(--muted); background:var(--surface); }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--amber); box-shadow:0 0 0 4px color-mix(in srgb, var(--amber) 14%, transparent); }
+.dot.connected { background:var(--green); box-shadow:0 0 0 4px color-mix(in srgb, var(--green) 14%, transparent); }
+.dot.error { background:var(--red); box-shadow:0 0 0 4px color-mix(in srgb, var(--red) 14%, transparent); }
+.hero { margin-bottom:23px; }
+.eyebrow { color:var(--blue-deep); font-size:11px; letter-spacing:.2em; font-weight:800; margin-bottom:10px; }
+h1 { font-size:clamp(30px,6vw,43px); line-height:1.12; margin:0 0 12px; letter-spacing:-.04em; }
+.sub { color:var(--muted); font-size:14px; line-height:1.7; margin:0; max-width:520px; }
+.panel { background:var(--surface); border:1px solid var(--line); border-radius:26px; padding:clamp(20px,5vw,34px); box-shadow:0 18px 50px #3e7db20c; backdrop-filter:blur(12px); }
+.panel-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:24px; }
+.panel-head h2 { margin:0; font-size:16px; letter-spacing:-.02em; }
+.tiny-label { color:var(--muted); font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+.control-wrap { display:flex; justify-content:center; padding:8px 0 25px; }
+.main-button { width:min(100%,330px); min-height:168px; border:1px solid #c1e2ff; border-radius:28px; color:#16456f; cursor:pointer; position:relative; overflow:hidden; background:linear-gradient(145deg,#e0f2ff 0%,#acd9ff 48%,#8cc5fa 100%); box-shadow:0 12px 0 #6ea8dc, 0 22px 36px #4f9ad82b, inset 0 2px 0 #ffffffc9; transition:transform .16s ease, box-shadow .16s ease, filter .16s ease; }
+.main-button::before { content:""; position:absolute; width:220px; height:220px; border-radius:50%; border:1px solid #ffffff6b; right:-70px; top:-100px; }
+.main-button:hover { filter:saturate(1.07); transform:translateY(-2px); box-shadow:0 14px 0 #6ea8dc, 0 27px 38px #4f9ad833, inset 0 2px 0 #ffffffc9; }
+.main-button:active { transform:translateY(7px); box-shadow:0 4px 0 #6ea8dc, 0 10px 18px #4f9ad81e; }
+.main-button:disabled { cursor:not-allowed; filter:grayscale(.25); opacity:.65; }
+.button-inner { position:relative; z-index:1; display:flex; height:100%; min-height:168px; flex-direction:column; align-items:center; justify-content:center; gap:10px; }
+.power { width:45px; height:45px; display:grid; place-items:center; border-radius:15px; background:#ffffff7a; border:1px solid #ffffffa8; }
+.power svg { width:23px; height:23px; }
+.button-title { font-weight:850; font-size:21px; letter-spacing:.01em; }
+.button-caption { font-size:12px; color:#32648f; }
+.payload-editor { max-width:430px; margin:0 auto 24px; }
+.payload-label { display:block; font-size:12px; font-weight:750; margin-bottom:9px; }
+.payload-row { display:flex; gap:9px; }
+.payload-input { flex:1; min-width:0; border:1px solid var(--line); border-radius:13px; padding:13px 14px; font:600 14px ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--text); background:light-dark(#f8fbff,#142238); outline:none; }
+.payload-input:focus { border-color:#78b9f2; box-shadow:0 0 0 3px #78b9f225; }
+.payload-hint { color:var(--muted); font-size:11px; line-height:1.6; margin-top:8px; }
+.voice-section { margin:4px auto 24px; max-width:520px; border:1px solid var(--line); border-radius:18px; padding:16px; background:light-dark(#f8fbff,#142238); }
+.voice-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+.voice-head label { font-size:12px; font-weight:750; }
+.voice-select,.voice-command-input { width:100%; min-width:0; border:1px solid var(--line); border-radius:11px; padding:10px 11px; color:var(--text); background:var(--surface); font:inherit; font-size:13px; }
+.voice-action { width:100%; display:flex; justify-content:center; align-items:center; gap:9px; border:1px solid #9bcdf8; border-radius:13px; padding:13px 15px; margin:10px 0; color:#16456f; background:linear-gradient(145deg,#e0f2ff,#acd9ff); font-weight:800; cursor:pointer; }
+.voice-action:disabled { opacity:.55; cursor:not-allowed; }
+.voice-status { color:var(--muted); font-size:12px; line-height:1.6; }
+.transcript { margin-top:10px; border:1px solid var(--line); border-radius:11px; padding:11px; min-height:43px; font-size:13px; line-height:1.6; overflow-wrap:anywhere; background:var(--surface); }
+.command-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+.command-field { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.command-field label { color:var(--muted); font-size:11px; }
+.voice-note { color:var(--muted); font-size:11px; line-height:1.6; margin-top:10px; }
+.status-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.stat { padding:15px; border:1px solid var(--line); border-radius:17px; background:light-dark(#f8fbff,#18273c); min-width:0; }
+.stat-label { color:var(--muted); font-size:11px; margin-bottom:9px; }
+.stat-value { font-weight:700; font-size:13px; overflow-wrap:anywhere; }
+.stat-value.good { color:var(--green); }
+.stat-value.bad { color:var(--red); }
+.stat-value.wait { color:var(--amber); }
+.section { margin-top:22px; }
+.section-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; }
+.section-title h3 { margin:0; font-size:13px; }
+.topic { border:1px solid var(--line); border-radius:13px; padding:12px 14px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; background:light-dark(#f7fbff,#142238); overflow-wrap:anywhere; }
+.log { display:flex; flex-direction:column; gap:8px; max-height:190px; overflow:auto; }
+.log-item { display:grid; grid-template-columns:65px 1fr; gap:10px; padding:10px 12px; background:light-dark(#f7fbff,#142238); border:1px solid var(--line); border-radius:12px; font-size:12px; line-height:1.5; }
+.log-time { color:var(--muted); font-variant-numeric:tabular-nums; }
+.log-message { overflow-wrap:anywhere; }
+.log-empty { color:var(--muted); font-size:12px; padding:12px 2px; }
+.footer { margin-top:18px; color:var(--muted); font-size:11px; line-height:1.7; text-align:center; }
+.btn-row { display:flex; justify-content:flex-end; gap:8px; }
+.secondary { border:1px solid var(--line); color:var(--text); background:var(--surface); border-radius:10px; padding:7px 10px; font-size:11px; cursor:pointer; }
+@media (max-width:480px) { #app { padding:20px 13px 30px; } .topline { margin-bottom:23px; } .status-grid { gap:9px; } .stat { padding:12px; } .main-button,.button-inner { min-height:150px; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <main class="shell">
+    <header class="topline">
+      <div class="brand"><div class="logo">⌁</div><span>JJLAB <span style="color:#6da9e4">/</span> CONTROL</span></div>
+      <div class="pill"><span class="dot" id="headerDot"></span><span id="headerStatus">正在初始化</span></div>
+    </header>
+    <section class="hero">
+      <div class="eyebrow">MQTT DEVICE PANEL</div>
+      <h1>簡單控制，<br>即時連線。</h1>
+      <p class="sub">按下控制按鈕，即可透過 MQTT 發送指令。頁面開啟後會自動連線，並即時顯示連線、訂閱與訊息狀態。</p>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>裝置控制</h2><span class="tiny-label">COMMAND · 01</span></div>
+      <div class="control-wrap">
+        <button class="main-button" id="sendButton" disabled aria-label="傳送 b1_on 指令">
+          <span class="button-inner">
+            <span class="power" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 2v10"/><path d="M6.2 5.8a8 8 0 1 0 11.6 0"/></svg></span>
+            <span class="button-title">傳送 B1 ON</span>
+            <span class="button-caption" id="buttonCaption">等待 MQTT 連線中…</span>
+          </span>
+        </button>
+      </div>
+      <div class="payload-editor">
+        <label class="payload-label" for="payloadInput">自訂輸出文字（Payload）</label>
+        <div class="payload-row">
+          <input class="payload-input" id="payloadInput" type="text" value="b1_on" maxlength="512" autocomplete="off" spellcheck="false" aria-describedby="payloadHint">
+        </div>
+        <div class="payload-hint" id="payloadHint">按下上方按鈕時，會把這裡的文字發送到 jjlab/a。預設值為 b1_on。</div>
+      </div>
+      <div class="voice-section">
+        <div class="voice-head"><label for="voiceMode">語音控制模式</label><span class="tiny-label">VOICE · MQTT</span></div>
+        <select class="voice-select" id="voiceMode">
+          <option value="fixed">固定指令：說出設定好的口令</option>
+          <option value="dictation">語音轉文字：辨識結果直接發送</option>
+        </select>
+        <button class="voice-action" id="voiceButton" type="button"><span aria-hidden="true">🎙️</span><span id="voiceButtonText">開始語音控制</span></button>
+        <div class="voice-status" id="voiceStatus" role="status">正在檢查瀏覽器語音辨識支援…</div>
+        <div class="transcript" id="transcript" aria-live="polite">辨識結果會顯示在這裡。</div>
+        <div id="fixedCommandSettings">
+          <div class="command-grid">
+            <div class="command-field"><label for="phraseOn">開啟口令</label><input class="voice-command-input" id="phraseOn" value="開啟 B1" maxlength="80"></div>
+            <div class="command-field"><label for="payloadOn">開啟時發送的 Payload</label><input class="voice-command-input" id="payloadOn" value="b1_on" maxlength="512"></div>
+            <div class="command-field"><label for="phraseOff">關閉口令</label><input class="voice-command-input" id="phraseOff" value="關閉 B1" maxlength="80"></div>
+            <div class="command-field"><label for="payloadOff">關閉時發送的 Payload</label><input class="voice-command-input" id="payloadOff" value="b1_off" maxlength="512"></div>
+          </div>
+          <div class="voice-note">請先向老師或確認裝置端程式，確認實際指令格式；上方預設的 b1_on / b1_off 只是可修改範例。語音只會在符合設定口令時發送。</div>
+        </div>
+        <div class="voice-note" id="dictationNote" hidden>此模式會將辨識出的文字直接當作 Payload 發送至 jjlab/a。請勿說出密碼或其他機密資訊。</div>
+      </div>
+      <div class="status-grid">
+        <div class="stat"><div class="stat-label">伺服器連線</div><div class="stat-value wait" id="connectionValue">連線中…</div></div>
+        <div class="stat"><div class="stat-label">主題訂閱</div><div class="stat-value wait" id="subscriptionValue">等待連線</div></div>
+        <div class="stat"><div class="stat-label">最近一次發送</div><div class="stat-value" id="lastSent">尚未發送</div></div>
+        <div class="stat"><div class="stat-label">收到訊息</div><div class="stat-value" id="receivedCount">0 則</div></div>
+      </div>
+      <div class="section">
+        <div class="section-title"><h3>連線資訊</h3></div>
+        <div class="topic">Broker　broker.emqx.io<br>WebSocket　wss://broker.emqx.io:8084/mqtt<br>Topic　jjlab/a<br>Payload　b1_on</div>
+      </div>
+      <div class="section">
+        <div class="section-title"><h3>活動紀錄</h3><div class="btn-row"><button class="secondary" id="reconnectButton">重新連線</button><button class="secondary" id="clearLog">清除紀錄</button></div></div>
+        <div class="log" id="log"><div class="log-empty">正在準備連線紀錄…</div></div>
+      </div>
+    </section>
+    <div class="footer">使用 EMQX 公開測試 Broker · 公開主題上的訊息可能被其他人看見，請勿傳送機密資料。</div>
+  </main>
+</div>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+(() => {
+  const BROKER = "wss://broker.emqx.io:8084/mqtt";
+  const TOPIC = "jjlab/a";
+  const $ = (id) => document.getElementById(id);
+  let client = null;
+  let received = 0;
+  let reconnectTimer = null;
+  let recognition = null;
+  let isListening = false;
+  let voiceFinalText = "";
+  const timeNow = () => new Date().toLocaleTimeString("zh-TW", {hour12:false});
+  function addLog(message, kind = "info") {
+    const log = $("log");
+    const empty = log.querySelector(".log-empty");
+    if (empty) empty.remove();
+    const item = document.createElement("div");
+    item.className = "log-item";
+    const time = document.createElement("span");
+    time.className = "log-time";
+    time.textContent = timeNow();
+    const body = document.createElement("span");
+    body.className = "log-message";
+    body.textContent = message;
+    if (kind === "error") body.style.color = "var(--red)";
+    if (kind === "good") body.style.color = "var(--green)";
+    item.append(time, body);
+    log.prepend(item);
+    while (log.children.length > 35) log.lastElementChild.remove();
+  }
+  function setHeader(status, state) {
+    $("headerStatus").textContent = status;
+    $("headerDot").className = "dot" + (state === "connected" ? " connected" : state === "error" ? " error" : "");
+  }
+  function setValue(id, text, state = "") {
+    const el = $(id);
+    el.textContent = text;
+    el.className = "stat-value" + (state ? " " + state : "");
+  }
+  function updateButton() {
+    const ready = !!client && client.connected;
+    $("sendButton").disabled = !ready;
+    $("buttonCaption").textContent = ready ? "透過 jjlab/a 傳送 b1_on" : "等待 MQTT 連線中…";
+  }
+  function publishPayload(payload, source = "指令") {
+    if (!client || !client.connected) {
+      addLog("尚未連線，" + source + "未發送。", "error");
+      return;
+    }
+    if (!String(payload).trim()) {
+      addLog("Payload 為空白，未發送。", "error");
+      return;
+    }
+    client.publish(TOPIC, payload, { qos: 0, retain: false }, (err) => {
+      if (err) {
+        addLog(source + "發送失敗：" + err.message, "error");
+        $("lastSent").textContent = "發送失敗";
+      } else {
+        $("lastSent").textContent = payload + " · " + timeNow();
+        addLog("已發送" + source + " · " + TOPIC + " → " + payload, "good");
+      }
+    });
+  }
+  function normalizeCommand(value) {
+    return String(value || "").trim().toLocaleLowerCase().replace(/[，。！？、,.!?\s]/g, "");
+  }
+  function handleVoiceText(text) {
+    const result = String(text || "").trim();
+    if (!result) return;
+    $("transcript").textContent = result;
+    if ($("voiceMode").value === "dictation") {
+      publishPayload(result, "語音文字");
+      return;
+    }
+    const spoken = normalizeCommand(result);
+    const onPhrase = normalizeCommand($("phraseOn").value);
+    const offPhrase = normalizeCommand($("phraseOff").value);
+    if (onPhrase && spoken === onPhrase) {
+      publishPayload($("payloadOn").value, "語音開啟指令");
+    } else if (offPhrase && spoken === offPhrase) {
+      publishPayload($("payloadOff").value, "語音關閉指令");
+    } else {
+      addLog("語音內容未符合已設定口令，未發送：" + result, "error");
+      $("voiceStatus").textContent = "未符合固定口令；沒有發送 MQTT 訊息。請調整口令或再說一次。";
+    }
+  }
+  function setupVoiceRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      $("voiceButton").disabled = true;
+      $("voiceStatus").textContent = "此瀏覽器不支援 Web Speech API。請改用支援語音辨識的桌面版 Chrome，並允許麥克風權限。";
+      addLog("瀏覽器不支援語音辨識 API；手動 MQTT 控制仍可使用。", "error");
+      return;
+    }
+    recognition = new SpeechRecognition();
+    recognition.lang = "zh-TW";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.onstart = () => {
+      isListening = true;
+      voiceFinalText = "";
+      $("voiceButtonText").textContent = "停止聆聽";
+      $("voiceStatus").textContent = "正在聆聽，請清楚說出指令…";
+      addLog("語音辨識開始", "good");
+    };
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const part = event.results[i][0].transcript;
+        if (event.results[i].isFinal) voiceFinalText += part;
+        else interim += part;
+      }
+      $("transcript").textContent = (voiceFinalText + interim).trim() || "正在辨識…";
+    };
+    recognition.onerror = (event) => {
+      const messages = { "not-allowed":"麥克風權限遭拒，請在瀏覽器設定中允許使用麥克風。", "no-speech":"沒有偵測到語音，請再試一次。", "network":"語音辨識網路服務失敗，請檢查網路後重試。" };
+      $("voiceStatus").textContent = messages[event.error] || ("語音辨識發生問題：" + event.error);
+      addLog("語音辨識錯誤：" + event.error, "error");
+    };
+    recognition.onend = () => {
+      isListening = false;
+      $("voiceButtonText").textContent = "開始語音控制";
+      if (voiceFinalText.trim()) {
+        handleVoiceText(voiceFinalText);
+        if ($("voiceMode").value === "dictation") $("voiceStatus").textContent = "辨識完成，已嘗試將文字發送到 MQTT。";
+        else $("voiceStatus").textContent = "辨識完成。若符合口令，已嘗試發送 MQTT 指令。";
+      } else if (!$("voiceStatus").textContent.includes("權限") && !$("voiceStatus").textContent.includes("網路服務失敗")) {
+        $("voiceStatus").textContent = "聆聽已結束。可以再次按下按鈕。";
+      }
+    };
+  }
+  function connect() {
+    if (client) {
+      try { client.removeAllListeners(); client.end(true); } catch (_) {}
+      client = null;
+    }
+    clearTimeout(reconnectTimer);
+    setHeader("正在連線", "pending");
+    setValue("connectionValue", "正在連線…", "wait");
+    setValue("subscriptionValue", "等待連線", "wait");
+    updateButton();
+    addLog("嘗試連線至 broker.emqx.io（安全 WebSocket）");
+    if (!window.mqtt) {
+      setHeader("載入失敗", "error");
+      setValue("connectionValue", "MQTT 程式載入失敗", "bad");
+      addLog("無法載入 MQTT.js，請檢查網路或 CDN 存取權限。", "error");
+      return;
+    }
+    const clientId = "jjlab_web_" + Math.random().toString(16).slice(2, 10);
+    client = mqtt.connect(BROKER, {
+      clientId,
+      clean: true,
+      connectTimeout: 10000,
+      reconnectPeriod: 3000,
+      keepalive: 30,
+      protocolVersion: 4
+    });
+    client.on("connect", () => {
+      setHeader("已連線", "connected");
+      setValue("connectionValue", "已連線", "good");
+      addLog("MQTT 連線成功", "good");
+      client.subscribe(TOPIC, { qos: 0 }, (err) => {
+        if (err) {
+          setValue("subscriptionValue", "訂閱失敗", "bad");
+          addLog("訂閱失敗：" + err.message, "error");
+        } else {
+          setValue("subscriptionValue", "已訂閱 jjlab/a", "good");
+          addLog("已訂閱主題 " + TOPIC, "good");
+        }
+      });
+      updateButton();
+    });
+    client.on("reconnect", () => {
+      setHeader("重新連線中", "pending");
+      setValue("connectionValue", "重新連線中…", "wait");
+      addLog("連線中斷，正在自動重連");
+      updateButton();
+    });
+    client.on("offline", () => {
+      setHeader("離線", "error");
+      setValue("connectionValue", "離線", "bad");
+      setValue("subscriptionValue", "未確認", "wait");
+      addLog("MQTT client 目前離線", "error");
+      updateButton();
+    });
+    client.on("close", () => {
+      setHeader("連線已關閉", "error");
+      setValue("connectionValue", "連線已關閉", "bad");
+      updateButton();
+    });
+    client.on("error", (err) => {
+      setHeader("連線錯誤", "error");
+      setValue("connectionValue", "連線錯誤", "bad");
+      addLog("MQTT 錯誤：" + (err && err.message ? err.message : "未知錯誤"), "error");
+      updateButton();
+    });
+    client.on("message", (topic, payload) => {
+      received++;
+      setValue("receivedCount", received + " 則");
+      addLog("收到訊息 · " + topic + " → " + payload.toString(), "good");
+    });
+  }
+  $("sendButton").addEventListener("click", () => {
+    if (!client || !client.connected) {
+      addLog("尚未連線，指令未發送。", "error");
+      return;
+    }
+    const payload = $("payloadInput").value;
+    if (!payload.trim()) {
+      addLog("輸出文字不能是空白，請先輸入內容。", "error");
+      $("payloadInput").focus();
+      return;
+    }
+    publishPayload(payload, "手動指令");
+  });
+  $("voiceButton").addEventListener("click", () => {
+    if (!recognition) return;
+    if (isListening) {
+      recognition.stop();
+      return;
+    }
+    voiceFinalText = "";
+    $("transcript").textContent = "正在等待語音…";
+    try { recognition.start(); }
+    catch (err) {
+      $("voiceStatus").textContent = "無法啟動語音辨識，請稍候再試。";
+      addLog("無法啟動語音辨識：" + err.message, "error");
+    }
+  });
+  $("voiceMode").addEventListener("change", () => {
+    const fixed = $("voiceMode").value === "fixed";
+    $("fixedCommandSettings").hidden = !fixed;
+    $("dictationNote").hidden = fixed;
+    $("voiceStatus").textContent = fixed ? "固定指令模式：請說出設定的開啟或關閉口令。" : "語音轉文字模式：辨識完成後會直接發送文字。";
+  });
+  $("reconnectButton").addEventListener("click", connect);
+  $("clearLog").addEventListener("click", () => {
+    $("log").replaceChildren();
+    addLog("紀錄已清除");
+  });
+  window.addEventListener("online", () => {
+    if (!client || !client.connected) connect();
+  });
+  window.addEventListener("offline", () => {
+    setHeader("裝置離線", "error");
+    addLog("瀏覽器偵測到網路中斷", "error");
+  });
+  setupVoiceRecognition();
+  connect();
+})();
+</script>
+</body>
+</html>
